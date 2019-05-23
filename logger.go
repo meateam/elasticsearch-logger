@@ -151,10 +151,6 @@ func WithElasticsearchServerLogger(
 	grpcUnaryLoggingInterceptor := grpc_middleware.WithUnaryServerChain(
 		// Elastic APM agent unary server interceptor for logging metrics to APM.
 		apmgrpc.NewUnaryServerInterceptor(apmgrpc.WithRecovery()),
-		// Log incoming initial requests.
-		grpc_ctxtags.UnaryServerInterceptor(
-			grpc_ctxtags.WithFieldExtractorForInitialReq(RequestExtractor(logrusEntry)),
-		),
 		// Add the "trace.id" from the stream's context.
 		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 			// Add logrusEntry to the context.
