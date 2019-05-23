@@ -9,6 +9,7 @@ require (
 	github.com/olivere/elastic/v7 v7.0.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/viper v1.3.2
+	go.elastic.co/apm/module/apmgrpc v1.3.0
 	go.elastic.co/apm/module/apmhttp v1.3.0
 	google.golang.org/grpc v1.21.0
 )
