@@ -207,14 +207,15 @@ func IgnoreMethodServerPayloadLoggingDecider(fullIgnoredMethodName string) grpc_
 	}
 }
 
-func ignoreMethodsServerPayloadLoggingDecider(fullIgnoredMethodNames ...string) grpc_logging.ServerPayloadLoggingDecider {
+// IgnoreMethodsServerPayloadLoggingDecider ignores logging the payload of method that
+// is equal to any string of fullIgnoredMethodNames.
+func IgnoreMethodsServerPayloadLoggingDecider(fullIgnoredMethodNames ...string) grpc_logging.ServerPayloadLoggingDecider {
 	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
 		for _, ignoredMethodName := range fullIgnoredMethodNames {
 			if ignoredMethodName == fullMethodName {
 				return false
 			}
 		}
-
 		return true
 	}
 }
