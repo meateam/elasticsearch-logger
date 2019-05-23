@@ -153,7 +153,7 @@ func WithElasticsearchServerLogger(
 		apmgrpc.NewUnaryServerInterceptor(apmgrpc.WithRecovery()),
 		// Log incoming initial requests.
 		grpc_ctxtags.UnaryServerInterceptor(
-			grpc_ctxtags.WithFieldExtractorForInitialReq(grpc_ctxtags.CodeGenRequestFieldExtractor),
+			grpc_ctxtags.WithFieldExtractorForInitialReq(RequestExtractor(logrusEntry)),
 		),
 		// Add the "trace.id" from the stream's context.
 		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -204,6 +204,18 @@ func DefaultServerPayloadLoggingDecider(ctx context.Context, fullMethodName stri
 func IgnoreMethodServerPayloadLoggingDecider(fullIgnoredMethodName string) grpc_logging.ServerPayloadLoggingDecider {
 	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
 		return fullMethodName != fullIgnoredMethodName
+	}
+}
+
+func ignoreMethodsServerPayloadLoggingDecider(fullIgnoredMethodNames ...string) grpc_logging.ServerPayloadLoggingDecider {
+	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
+		for _, ignoredMethodName := range fullIgnoredMethodNames {
+			if ignoredMethodName == fullMethodName {
+				return false
+			}
+		}
+
+		return true
 	}
 }
 
