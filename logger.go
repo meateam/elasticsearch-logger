@@ -20,6 +20,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"go.elastic.co/apm/module/apmgrpc"
 	"go.elastic.co/apm/module/apmhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -142,10 +143,14 @@ func WithElasticsearchServerLogger(
 	)
 
 	// Server unary interceptor set up for logging incoming requests,
-	// and outgoing responses. It automatically adds the "trace.id" from
-	// the request's context, and logs payloads of request.
-	// Make sure we put the `grpc_ctxtags` context before everything else.
+	// and outgoing responses, and sets up the APM agent's unary server interceptor
+	// to log metrics to elastic APM.
+	// It automatically adds the "trace.id" from the request's context,
+	// and logs payloads of request. Make sure we put the `grpc_ctxtags`
+	// context before everything else.
 	grpcUnaryLoggingInterceptor := grpc_middleware.WithUnaryServerChain(
+		// Elastic APM agent unary server interceptor for logging metrics to APM.
+		apmgrpc.NewUnaryServerInterceptor(apmgrpc.WithRecovery()),
 		// Log incoming initial requests.
 		grpc_ctxtags.UnaryServerInterceptor(
 			grpc_ctxtags.WithFieldExtractorForInitialReq(grpc_ctxtags.CodeGenRequestFieldExtractor),
