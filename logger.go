@@ -119,10 +119,15 @@ func WithElasticsearchServerLogger(
 	grpcStreamLoggingInterceptor := grpc_middleware.WithStreamServerChain(
 		// Log incoming initial requests.
 		grpc_ctxtags.StreamServerInterceptor(
-			grpc_ctxtags.WithFieldExtractorForInitialReq(RequestExtractor(logrusEntry, extractInitialRequestDecider)),
+			grpc_ctxtags.WithFieldExtractorForInitialReq(
+				RequestExtractor(logrusEntry, extractInitialRequestDecider),
+			),
 		),
 		// Add the "trace.id" from the stream's context.
-		func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		func(srv interface{},
+			stream grpc.ServerStream,
+			info *grpc.StreamServerInfo,
+			handler grpc.StreamHandler) error {
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(stream.Context(), logrusEntry)
 
@@ -137,7 +142,10 @@ func WithElasticsearchServerLogger(
 			// Add the "trace.id" field to logrusEntry.
 			ctxlogrus.AddFields(logCtx, traceIDFields)
 
-			return grpc_logrus.StreamServerInterceptor(ctxlogrus.Extract(logCtx), opts...)(srv, stream, info, handler)
+			return grpc_logrus.StreamServerInterceptor(
+				ctxlogrus.Extract(logCtx),
+				opts...,
+			)(srv, stream, info, handler)
 		},
 		// Log payload of stream requests.
 		grpc_logrus.PayloadStreamServerInterceptor(logrusEntry, serverPayloadLoggingDecider),
@@ -153,7 +161,10 @@ func WithElasticsearchServerLogger(
 		// Elastic APM agent unary server interceptor for logging metrics to APM.
 		apmgrpc.NewUnaryServerInterceptor(apmgrpc.WithRecovery()),
 		// Add the "trace.id" from the stream's context.
-		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		func(ctx context.Context,
+			req interface{},
+			info *grpc.UnaryServerInfo,
+			handler grpc.UnaryHandler) (resp interface{}, err error) {
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(ctx, logrusEntry)
 
@@ -193,17 +204,26 @@ func ExtractTraceParent(ctx context.Context) string {
 }
 
 // DefaultServerPayloadLoggingDecider logs every payload.
-func DefaultServerPayloadLoggingDecider(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
+func DefaultServerPayloadLoggingDecider(
+	ctx context.Context,
+	fullMethodName string,
+	servingObject interface{}) bool {
 	return true
 }
 
 // DefaultExtractInitialRequestDecider logs every initial request, for unary and streams.
-func DefaultExtractInitialRequestDecider(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
+func DefaultExtractInitialRequestDecider(
+	ctx context.Context,
+	fullMethodName string,
+	servingObject interface{}) bool {
 	return true
 }
 
-// IgnoreMethodServerPayloadLoggingDecider ignores logging the payload of method that is equal to fullIgnoredMethodName.
-func IgnoreMethodServerPayloadLoggingDecider(fullIgnoredMethodName string) grpc_logging.ServerPayloadLoggingDecider {
+// IgnoreMethodServerPayloadLoggingDecider ignores logging the payload
+// of method that is equal to fullIgnoredMethodName.
+func IgnoreMethodServerPayloadLoggingDecider(
+	fullIgnoredMethodName string,
+) grpc_logging.ServerPayloadLoggingDecider {
 	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
 		return fullMethodName != fullIgnoredMethodName
 	}
@@ -211,7 +231,9 @@ func IgnoreMethodServerPayloadLoggingDecider(fullIgnoredMethodName string) grpc_
 
 // IgnoreMethodsServerPayloadLoggingDecider ignores logging the payload of method that
 // is equal to any string of fullIgnoredMethodNames.
-func IgnoreMethodsServerPayloadLoggingDecider(fullIgnoredMethodNames ...string) grpc_logging.ServerPayloadLoggingDecider {
+func IgnoreMethodsServerPayloadLoggingDecider(
+	fullIgnoredMethodNames ...string,
+) grpc_logging.ServerPayloadLoggingDecider {
 	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
 		for _, ignoredMethodName := range fullIgnoredMethodNames {
 			if ignoredMethodName == fullMethodName {
@@ -231,7 +253,8 @@ func RequestExtractor(entry *logrus.Entry, decider func(string) bool) grpc_ctxta
 		}
 
 		if p, ok := pbMsg.(proto.Message); ok {
-			entry.WithField("grpc.request.content", JSONPbMarshaller{p}).Info("server request payload logged as grpc.request.content field")
+			entry.WithField("grpc.request.content", JSONPbMarshaller{p}).
+				Info("server request payload logged as grpc.request.content field")
 		}
 
 		return nil
