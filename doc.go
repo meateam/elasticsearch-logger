@@ -17,7 +17,7 @@ ELASTICSEARCH_URL (default: http://localhost:9200) - Defines the url of the elas
 HOST_NAME (default: executable name) - Defines the host name of the server that is using the logger, which will
 be logged under 'Host' field.
 
-There's the `WithElasticsearchServerLogger` function which sets up a `grpc.ServerOption`
+There's the `ElasticsearchLoggerServerInterceptor` function which sets up a `grpc.ServerOption`
 to intercept streams and unary calls with `*logrus.Entry` of the logger, created with `NewLogger`,
 and the options given to it. Returns the `grpc.ServerOption` which will be used in `grpc.NewServer`
 to log all incoming stream and unary calls. It also sets up the APM agent's unary server interceptor
