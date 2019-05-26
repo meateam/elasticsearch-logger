@@ -102,7 +102,7 @@ func NewLogger() *logrus.Logger {
 // ElasticsearchLoggerServerInterceptor sets up a `grpc.ServerOption` to intercept streams with
 // `*logrus.Entry` of the logger, created with `NewLogger`, and the options given to it.
 // Returns the `grpc.ServerOption` which will be used in `grpc.NewServer`
-// to log all incoming stream calls.
+// to log all incoming calls.
 func ElasticsearchLoggerServerInterceptor(
 	logrusEntry *logrus.Entry,
 	serverPayloadLoggingDecider grpc_logging.ServerPayloadLoggingDecider,
@@ -113,9 +113,8 @@ func ElasticsearchLoggerServerInterceptor(
 	grpc_logrus.ReplaceGrpcLogger(logrusEntry)
 
 	// Server stream interceptor set up for logging incoming initial requests,
-	// and outgoing responses. It automatically adds the "trace.id" from
-	// the stream's context, and logs payloads of streams.
-	// Make sure we put the `grpc_ctxtags` context before everything else.
+	// and outgoing responses. Make sure we put the `grpc_ctxtags`
+	// context before everything else.
 	grpcStreamLoggingInterceptor := grpc_middleware.WithStreamServerChain(
 		// Log incoming initial requests.
 		grpc_ctxtags.StreamServerInterceptor(
@@ -152,10 +151,7 @@ func ElasticsearchLoggerServerInterceptor(
 	)
 
 	// Server unary interceptor set up for logging incoming requests,
-	// and outgoing responses, and sets up the APM agent's unary server interceptor
-	// to log metrics to elastic APM.
-	// It automatically adds the "trace.id" from the request's context,
-	// and logs payloads of request. Make sure we put the `grpc_ctxtags`
+	// and outgoing responses. Make sure we put the `grpc_ctxtags`
 	// context before everything else.
 	grpcUnaryLoggingInterceptor := grpc_middleware.WithUnaryServerChain(
 		// Elastic APM agent unary server interceptor for logging metrics to APM.
@@ -212,10 +208,7 @@ func DefaultServerPayloadLoggingDecider(
 }
 
 // DefaultExtractInitialRequestDecider logs every initial request, for unary and streams.
-func DefaultExtractInitialRequestDecider(
-	ctx context.Context,
-	fullMethodName string,
-	servingObject interface{}) bool {
+func DefaultExtractInitialRequestDecider(string) bool {
 	return true
 }
 
