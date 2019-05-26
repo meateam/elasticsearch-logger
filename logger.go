@@ -110,6 +110,11 @@ func ElasticsearchLoggerServerInterceptor(
 	decider DeciderFunc,
 	opts ...grpc_logrus.Option,
 ) []grpc.ServerOption {
+	// Adds the decider as an option to the logger interceptors.
+	opts = append(opts, grpc_logrus.WithDecider(func(fullMethodName string, err error) bool {
+		return decider(fullMethodName)
+	}))
+
 	// Make sure that log statements internal to gRPC library are logged using the logrus Logger as well.
 	grpc_logrus.ReplaceGrpcLogger(logrusEntry)
 
@@ -128,13 +133,6 @@ func ElasticsearchLoggerServerInterceptor(
 			stream grpc.ServerStream,
 			info *grpc.StreamServerInfo,
 			handler grpc.StreamHandler) error {
-			if !decider(info.FullMethod) { // Skip logging this method.
-				return grpc_logrus.StreamServerInterceptor(
-					ctxlogrus.Extract(stream.Context()),
-					opts...,
-				)(srv, stream, info, handler)
-			}
-
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(stream.Context(), logrusEntry)
 
@@ -174,10 +172,6 @@ func ElasticsearchLoggerServerInterceptor(
 			req interface{},
 			info *grpc.UnaryServerInfo,
 			handler grpc.UnaryHandler) (resp interface{}, err error) {
-			if !decider(info.FullMethod) { // Skip logging this method.
-				return grpc_logrus.UnaryServerInterceptor(logrusEntry, opts...)(ctx, req, info, handler)
-			}
-
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(ctx, logrusEntry)
 
