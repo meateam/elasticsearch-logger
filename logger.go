@@ -12,7 +12,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/logging"
 	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus/ctxlogrus"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
@@ -47,6 +46,9 @@ func init() {
 	viper.SetDefault(configHostName, hostName)
 	viper.AutomaticEnv()
 }
+
+// DeciderFunc is a function type to decide whether to create a log for fullMethodName.
+type DeciderFunc func(fullMethodName string) bool
 
 // JSONPbMarshaller is a struct used to marshal a protobuf message to JSON.
 type JSONPbMarshaller struct {
@@ -105,8 +107,7 @@ func NewLogger() *logrus.Logger {
 // to log all incoming calls.
 func ElasticsearchLoggerServerInterceptor(
 	logrusEntry *logrus.Entry,
-	serverPayloadLoggingDecider grpc_logging.ServerPayloadLoggingDecider,
-	extractInitialRequestDecider func(string) bool,
+	decider DeciderFunc,
 	opts ...grpc_logrus.Option,
 ) []grpc.ServerOption {
 	// Make sure that log statements internal to gRPC library are logged using the logrus Logger as well.
@@ -119,7 +120,7 @@ func ElasticsearchLoggerServerInterceptor(
 		// Log incoming initial requests.
 		grpc_ctxtags.StreamServerInterceptor(
 			grpc_ctxtags.WithFieldExtractorForInitialReq(
-				RequestExtractor(logrusEntry, extractInitialRequestDecider),
+				RequestExtractor(logrusEntry, decider),
 			),
 		),
 		// Add the "trace.id" from the stream's context.
@@ -127,6 +128,13 @@ func ElasticsearchLoggerServerInterceptor(
 			stream grpc.ServerStream,
 			info *grpc.StreamServerInfo,
 			handler grpc.StreamHandler) error {
+			if !decider(info.FullMethod) { // Skip logging this method.
+				return grpc_logrus.StreamServerInterceptor(
+					ctxlogrus.Extract(stream.Context()),
+					opts...,
+				)(srv, stream, info, handler)
+			}
+
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(stream.Context(), logrusEntry)
 
@@ -147,7 +155,12 @@ func ElasticsearchLoggerServerInterceptor(
 			)(srv, stream, info, handler)
 		},
 		// Log payload of stream requests.
-		grpc_logrus.PayloadStreamServerInterceptor(logrusEntry, serverPayloadLoggingDecider),
+		grpc_logrus.PayloadStreamServerInterceptor(
+			logrusEntry,
+			func(ctx context.Context, fullMethodName string, servingObject interface{}) bool { // Wrap decider.
+				return decider(fullMethodName)
+			},
+		),
 	)
 
 	// Server unary interceptor set up for logging incoming requests,
@@ -161,6 +174,10 @@ func ElasticsearchLoggerServerInterceptor(
 			req interface{},
 			info *grpc.UnaryServerInfo,
 			handler grpc.UnaryHandler) (resp interface{}, err error) {
+			if !decider(info.FullMethod) { // Skip logging this method.
+				return grpc_logrus.UnaryServerInterceptor(logrusEntry, opts...)(ctx, req, info, handler)
+			}
+
 			// Add logrusEntry to the context.
 			logCtx := ctxlogrus.ToContext(ctx, logrusEntry)
 
@@ -178,7 +195,12 @@ func ElasticsearchLoggerServerInterceptor(
 			return grpc_logrus.UnaryServerInterceptor(logrusEntry, opts...)(ctx, req, info, handler)
 		},
 		// Log payload of unrary requests.
-		grpc_logrus.PayloadUnaryServerInterceptor(logrusEntry, serverPayloadLoggingDecider),
+		grpc_logrus.PayloadUnaryServerInterceptor(
+			logrusEntry,
+			func(ctx context.Context, fullMethodName string, servingObject interface{}) bool { // Wrap decider.
+				return decider(fullMethodName)
+			},
+		),
 	)
 
 	return []grpc.ServerOption{grpcUnaryLoggingInterceptor, grpcStreamLoggingInterceptor}
@@ -199,35 +221,15 @@ func ExtractTraceParent(ctx context.Context) string {
 	return ""
 }
 
-// DefaultServerPayloadLoggingDecider logs every payload.
-func DefaultServerPayloadLoggingDecider(
-	ctx context.Context,
-	fullMethodName string,
-	servingObject interface{}) bool {
+// DefaultDecider logs every payload.
+func DefaultDecider(string) bool {
 	return true
 }
 
-// DefaultExtractInitialRequestDecider logs every initial request, for unary and streams.
-func DefaultExtractInitialRequestDecider(string) bool {
-	return true
-}
-
-// IgnoreMethodServerPayloadLoggingDecider ignores logging the payload
-// of method that is equal to fullIgnoredMethodName.
-func IgnoreMethodServerPayloadLoggingDecider(
-	fullIgnoredMethodName string,
-) grpc_logging.ServerPayloadLoggingDecider {
-	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
-		return fullMethodName != fullIgnoredMethodName
-	}
-}
-
-// IgnoreMethodsServerPayloadLoggingDecider ignores logging the payload of method that
+// IgnoreServerMethodsDecider ignores logging the payload of method that
 // is equal to any string of fullIgnoredMethodNames.
-func IgnoreMethodsServerPayloadLoggingDecider(
-	fullIgnoredMethodNames ...string,
-) grpc_logging.ServerPayloadLoggingDecider {
-	return func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
+func IgnoreServerMethodsDecider(fullIgnoredMethodNames ...string) DeciderFunc {
+	return func(fullMethodName string) bool {
 		for _, ignoredMethodName := range fullIgnoredMethodNames {
 			if ignoredMethodName == fullMethodName {
 				return false
@@ -239,7 +241,7 @@ func IgnoreMethodsServerPayloadLoggingDecider(
 
 // RequestExtractor extracts the request and logs it as json under the key "grpc.request.content".
 // Pass decider function to not extract the requests for certain methods.
-func RequestExtractor(entry *logrus.Entry, decider func(string) bool) grpc_ctxtags.RequestFieldExtractorFunc {
+func RequestExtractor(entry *logrus.Entry, decider DeciderFunc) grpc_ctxtags.RequestFieldExtractorFunc {
 	return func(fullMethod string, pbMsg interface{}) map[string]interface{} {
 		if !decider(fullMethod) {
 			return nil
