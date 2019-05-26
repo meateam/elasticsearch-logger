@@ -1,4 +1,4 @@
-module github.com/meateam/grpc-elasticsearch-logger
+module github.com/meateam/elasticsearch-logger
 
 go 1.12
 

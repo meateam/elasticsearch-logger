@@ -99,11 +99,11 @@ func NewLogger() *logrus.Logger {
 	return log
 }
 
-// WithElasticsearchServerLogger sets up a `grpc.ServerOption` to intercept streams with
+// ElasticsearchLoggerServerInterceptor sets up a `grpc.ServerOption` to intercept streams with
 // `*logrus.Entry` of the logger, created with `NewLogger`, and the options given to it.
 // Returns the `grpc.ServerOption` which will be used in `grpc.NewServer`
 // to log all incoming stream calls.
-func WithElasticsearchServerLogger(
+func ElasticsearchLoggerServerInterceptor(
 	logrusEntry *logrus.Entry,
 	serverPayloadLoggingDecider grpc_logging.ServerPayloadLoggingDecider,
 	extractInitialRequestDecider func(string) bool,
