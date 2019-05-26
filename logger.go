@@ -115,9 +115,6 @@ func ElasticsearchLoggerServerInterceptor(
 		return decider(fullMethodName)
 	}))
 
-	// Make sure that log statements internal to gRPC library are logged using the logrus Logger as well.
-	grpc_logrus.ReplaceGrpcLogger(logrusEntry)
-
 	// Server stream interceptor set up for logging incoming initial requests,
 	// and outgoing responses. Make sure we put the `grpc_ctxtags`
 	// context before everything else.
