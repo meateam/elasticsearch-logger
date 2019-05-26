@@ -107,14 +107,10 @@ func NewLogger() *logrus.Logger {
 // to log all incoming calls.
 func ElasticsearchLoggerServerInterceptor(
 	logrusEntry *logrus.Entry,
-	decider DeciderFunc,
+	serverPayloadLoggingDecider DeciderFunc,
+	extractInitialRequestDecider DeciderFunc,
 	opts ...grpc_logrus.Option,
 ) []grpc.ServerOption {
-	// Adds the decider as an option to the logger interceptors.
-	opts = append(opts, grpc_logrus.WithDecider(func(fullMethodName string, err error) bool {
-		return decider(fullMethodName)
-	}))
-
 	// Server stream interceptor set up for logging incoming initial requests,
 	// and outgoing responses. Make sure we put the `grpc_ctxtags`
 	// context before everything else.
@@ -122,7 +118,7 @@ func ElasticsearchLoggerServerInterceptor(
 		// Log incoming initial requests.
 		grpc_ctxtags.StreamServerInterceptor(
 			grpc_ctxtags.WithFieldExtractorForInitialReq(
-				RequestExtractor(logrusEntry, decider),
+				RequestExtractor(logrusEntry, extractInitialRequestDecider),
 			),
 		),
 		// Add the "trace.id" from the stream's context.
@@ -153,7 +149,7 @@ func ElasticsearchLoggerServerInterceptor(
 		grpc_logrus.PayloadStreamServerInterceptor(
 			logrusEntry,
 			func(ctx context.Context, fullMethodName string, servingObject interface{}) bool { // Wrap decider.
-				return decider(fullMethodName)
+				return serverPayloadLoggingDecider(fullMethodName)
 			},
 		),
 	)
@@ -189,7 +185,7 @@ func ElasticsearchLoggerServerInterceptor(
 		grpc_logrus.PayloadUnaryServerInterceptor(
 			logrusEntry,
 			func(ctx context.Context, fullMethodName string, servingObject interface{}) bool { // Wrap decider.
-				return decider(fullMethodName)
+				return serverPayloadLoggingDecider(fullMethodName)
 			},
 		),
 	)
