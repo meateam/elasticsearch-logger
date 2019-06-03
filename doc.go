@@ -12,7 +12,8 @@ LOG_INDEX (default: "log") - Defines the index to which the logs would be indexe
 the logs would be indexed to index pattern LOG_INDEX-*,
 where * is the current day's date in the format 'YYYY.MM.DD'
 
-ELASTICSEARCH_URL (default: http://localhost:9200) - Defines the url of the elasticsearch server to index the logs to.
+ELASTICSEARCH_URL (default: http://localhost:9200) - Defines the url of the elasticsearch server
+to index the logs to.
 
 HOST_NAME (default: executable name) - Defines the host name of the server that is using the logger, which will
 be logged under 'Host' field.
