@@ -19,6 +19,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"go.elastic.co/apm"
 	"go.elastic.co/apm/module/apmgrpc"
 	"go.elastic.co/apm/module/apmhttp"
 	"google.golang.org/grpc"
@@ -196,6 +197,8 @@ func ElasticsearchLoggerServerInterceptor(
 // ExtractTraceParent gets a `context.Context` which holds the "Elastic-Apm-Traceparent",
 // which is the HTTP header for trace propagation, and returns the trace id.
 func ExtractTraceParent(ctx context.Context) string {
+	// If apmhttp.TraceparentHeader is present in request's headers
+	// then parse the trace id and return it.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if values := md.Get(traceIDHeader); len(values) == 1 {
 			traceCtx, err := apmhttp.ParseTraceparentHeader(values[0])
@@ -205,7 +208,10 @@ func ExtractTraceParent(ctx context.Context) string {
 		}
 	}
 
-	return ""
+	// If apmhttp.TraceparentHeader is not present then return the created
+	// transaction's trace id from its context.
+	tx := apm.TransactionFromContext(ctx)
+	return tx.TraceContext().Trace.String()
 }
 
 // DefaultDecider logs every payload.
