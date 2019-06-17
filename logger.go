@@ -3,7 +3,9 @@ package logger
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,17 +29,23 @@ import (
 )
 
 const (
-	traceIDHeader          = apmhttp.TraceparentHeader
-	configLogLevel         = "log_level"
-	configLogIndex         = "log_index"
-	configElasticsearchURL = "elasticsearch_url"
-	configHostName         = "host_name"
+	traceIDHeader               = apmhttp.TraceparentHeader
+	configLogLevel              = "log_level"
+	configLogIndex              = "log_index"
+	configElasticsearchURL      = "elasticsearch_url"
+	configHostName              = "host_name"
+	configElasticsearchUser     = "elasticsearch_user"
+	configElasticsearchPassword = "elasticsearch_password"
+	configTLSSkipVerify         = "tls_skip_verify"
 )
 
 func init() {
 	viper.SetDefault(configLogLevel, logrus.ErrorLevel)
 	viper.SetDefault(configLogIndex, "log")
 	viper.SetDefault(configElasticsearchURL, "http://localhost:9200")
+	viper.SetDefault(configElasticsearchUser, "")
+	viper.SetDefault(configElasticsearchPassword, "")
+	viper.SetDefault(configTLSSkipVerify, true)
 
 	hostName := filepath.Base(os.Args[0])
 	if runtime.GOOS == "windows" {
@@ -79,8 +87,26 @@ func NewLogger() *logrus.Logger {
 	log.SetFormatter(&logrus.JSONFormatter{})
 
 	elasticURL := viper.GetString(configElasticsearchURL)
+	transCfg := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: viper.GetBool(configTLSSkipVerify), // ignore expired SSL certificates
+		},
+	}
+	httpClient := &http.Client{Transport: transCfg}
 
-	elasticClient, err := elastic.NewClient(elastic.SetURL(elasticURL), elastic.SetSniff(false))
+	elasticOpts := []elastic.ClientOptionFunc{
+		elastic.SetURL(strings.Split(elasticURL, ",")...),
+		elastic.SetSniff(false),
+		elastic.SetHttpClient(httpClient),
+	}
+
+	elasticUser := viper.GetString(configElasticsearchUser)
+	elasticPassword := viper.GetString(configElasticsearchPassword)
+	if elasticUser != "" && elasticPassword != "" {
+		elasticOpts = append(elasticOpts, elastic.SetBasicAuth(elasticUser, elasticPassword))
+	}
+
+	elasticClient, err := elastic.NewClient(elasticOpts...)
 	if err != nil {
 		log.Error(err)
 		return log
