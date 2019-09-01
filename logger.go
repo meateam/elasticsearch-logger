@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ const (
 	configElasticsearchUser     = "elasticsearch_user"
 	configElasticsearchPassword = "elasticsearch_password"
 	configTLSSkipVerify         = "tls_skip_verify"
+	configIgnoreURLs            = "elastic_apm_ignore_urls"
+	configElasticsearchSniff    = "elasticsearch_sniff"
 )
 
 func init() {
@@ -46,6 +49,8 @@ func init() {
 	viper.SetDefault(configElasticsearchUser, "")
 	viper.SetDefault(configElasticsearchPassword, "")
 	viper.SetDefault(configTLSSkipVerify, true)
+	viper.SetDefault(configIgnoreURLs, "")
+	viper.SetDefault(configElasticsearchSniff, false)
 
 	hostName := filepath.Base(os.Args[0])
 	if runtime.GOOS == "windows" {
@@ -96,7 +101,7 @@ func NewLogger() *logrus.Logger {
 
 	elasticOpts := []elastic.ClientOptionFunc{
 		elastic.SetURL(strings.Split(elasticURL, ",")...),
-		elastic.SetSniff(false),
+		elastic.SetSniff(viper.GetBool(configElasticsearchSniff)),
 		elastic.SetHttpClient(httpClient),
 	}
 
@@ -148,30 +153,8 @@ func ElasticsearchLoggerServerInterceptor(
 				RequestExtractor(logrusEntry, extractInitialRequestDecider),
 			),
 		),
-		// Add the "trace.id" from the stream's context.
-		func(srv interface{},
-			stream grpc.ServerStream,
-			info *grpc.StreamServerInfo,
-			handler grpc.StreamHandler) error {
-			// Add logrusEntry to the context.
-			logCtx := ctxlogrus.ToContext(stream.Context(), logrusEntry)
-
-			// Extract the "trace.id" from the stream's context.
-			traceIDFields := logrus.Fields{
-				"trace.id": ExtractTraceParent(stream.Context()),
-			}
-
-			// Overwrite the logrus entry to always log the "trace.id" field.
-			*logrusEntry = *logrusEntry.WithFields(traceIDFields)
-
-			// Add the "trace.id" field to logrusEntry.
-			ctxlogrus.AddFields(logCtx, traceIDFields)
-
-			return grpc_logrus.StreamServerInterceptor(
-				ctxlogrus.Extract(logCtx),
-				opts...,
-			)(srv, stream, info, handler)
-		},
+		// Add the "trace.id" from the stream's context to the logrus entry.
+		addTraceIDToStreamContext(logrusEntry, opts...),
 		// Log payload of stream requests.
 		grpc_logrus.PayloadStreamServerInterceptor(
 			logrusEntry,
@@ -181,33 +164,16 @@ func ElasticsearchLoggerServerInterceptor(
 		),
 	)
 
+	serverUnaryOptions := []apmgrpc.ServerOption{apmgrpc.WithRecovery(), apmgrpc.WithServerRequestIgnorer(defaultUnaryServerRequestIgnorer())}
+
 	// Server unary interceptor set up for logging incoming requests,
 	// and outgoing responses. Make sure we put the `grpc_ctxtags`
 	// context before everything else.
 	grpcUnaryLoggingInterceptor := grpc_middleware.WithUnaryServerChain(
 		// Elastic APM agent unary server interceptor for logging metrics to APM.
-		apmgrpc.NewUnaryServerInterceptor(apmgrpc.WithRecovery()),
+		apmgrpc.NewUnaryServerInterceptor(serverUnaryOptions...),
 		// Add the "trace.id" from the stream's context.
-		func(ctx context.Context,
-			req interface{},
-			info *grpc.UnaryServerInfo,
-			handler grpc.UnaryHandler) (resp interface{}, err error) {
-			// Add logrusEntry to the context.
-			logCtx := ctxlogrus.ToContext(ctx, logrusEntry)
-
-			// Extract the "trace.id" from the stream's context.
-			traceIDFields := logrus.Fields{
-				"trace.id": ExtractTraceParent(ctx),
-			}
-
-			// Overwrite the logrus entry to always log the "trace.id" field.
-			*logrusEntry = *logrusEntry.WithFields(traceIDFields)
-
-			// Add the "trace.id" field to logrusEntry.
-			ctxlogrus.AddFields(logCtx, traceIDFields)
-
-			return grpc_logrus.UnaryServerInterceptor(logrusEntry, opts...)(ctx, req, info, handler)
-		},
+		addTraceIDToUnaryContext(logrusEntry, opts...),
 		// Log payload of unrary requests.
 		grpc_logrus.PayloadUnaryServerInterceptor(
 			logrusEntry,
@@ -273,4 +239,69 @@ func RequestExtractor(entry *logrus.Entry, decider DeciderFunc) grpc_ctxtags.Req
 
 		return nil
 	}
+}
+
+// addTraceIDToStreamContext extracts the "trace.id" value from the stream's context and adds
+// it as a field to logrusEntry.
+func addTraceIDToStreamContext(
+	logrusEntry *logrus.Entry,
+	opts ...grpc_logrus.Option,
+) grpc.StreamServerInterceptor {
+	return func(srv interface{},
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler) error {
+		// Add logrusEntry to the context.
+		logCtx := ctxlogrus.ToContext(stream.Context(), logrusEntry)
+
+		// Extract the "trace.id" from the stream's context.
+		traceIDFields := logrus.Fields{
+			"trace.id": ExtractTraceParent(stream.Context()),
+		}
+
+		// Overwrite the logrus entry to always log the "trace.id" field.
+		*logrusEntry = *logrusEntry.WithFields(traceIDFields)
+
+		// Add the "trace.id" field to logrusEntry.
+		ctxlogrus.AddFields(logCtx, traceIDFields)
+
+		return grpc_logrus.StreamServerInterceptor(
+			ctxlogrus.Extract(logCtx),
+			opts...,
+		)(srv, stream, info, handler)
+	}
+}
+
+// addTraceIDToUnaryContext extracts the "trace.id" value from the unary call's context and adds
+// it as a field to logrusEntry.
+func addTraceIDToUnaryContext(
+	logrusEntry *logrus.Entry,
+	opts ...grpc_logrus.Option,
+) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (resp interface{}, err error) {
+		// Add logrusEntry to the context.
+		logCtx := ctxlogrus.ToContext(ctx, logrusEntry)
+
+		// Extract the "trace.id" from the unary call's context.
+		traceIDFields := logrus.Fields{
+			"trace.id": ExtractTraceParent(ctx),
+		}
+
+		// Overwrite the logrus entry to always log the "trace.id" field.
+		*logrusEntry = *logrusEntry.WithFields(traceIDFields)
+
+		// Add the "trace.id" field to logrusEntry.
+		ctxlogrus.AddFields(logCtx, traceIDFields)
+
+		return grpc_logrus.UnaryServerInterceptor(logrusEntry, opts...)(ctx, req, info, handler)
+	}
+}
+
+func defaultUnaryServerRequestIgnorer() apmgrpc.RequestIgnorerFunc {
+	ignoreUrls := viper.GetString(configIgnoreURLs)
+
+	return apmgrpc.NewRegexpRequestIgnorer(regexp.MustCompile(ignoreUrls))
 }
