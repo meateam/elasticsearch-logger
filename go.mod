@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.5.0
 	github.com/golang/protobuf v1.3.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
+	github.com/meateam/api-gateway v0.0.0-20200105125141-67befdfab57f
 	github.com/meateam/elogrus/v4 v4.0.2
 	github.com/olivere/elastic/v7 v7.0.10
 	github.com/sirupsen/logrus v1.4.2
