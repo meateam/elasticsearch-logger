@@ -6,10 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -28,38 +25,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
-
-const (
-	traceIDHeader               = apmhttp.TraceparentHeader
-	configLogLevel              = "log_level"
-	configLogIndex              = "log_index"
-	configElasticsearchURL      = "elasticsearch_url"
-	configHostName              = "host_name"
-	configElasticsearchUser     = "elasticsearch_user"
-	configElasticsearchPassword = "elasticsearch_password"
-	configTLSSkipVerify         = "tls_skip_verify"
-	configIgnoreURLs            = "elastic_apm_ignore_urls"
-	configElasticsearchSniff    = "elasticsearch_sniff"
-)
-
-func init() {
-	viper.SetDefault(configLogLevel, logrus.ErrorLevel)
-	viper.SetDefault(configLogIndex, "log")
-	viper.SetDefault(configElasticsearchURL, "http://localhost:9200")
-	viper.SetDefault(configElasticsearchUser, "")
-	viper.SetDefault(configElasticsearchPassword, "")
-	viper.SetDefault(configTLSSkipVerify, true)
-	viper.SetDefault(configIgnoreURLs, "")
-	viper.SetDefault(configElasticsearchSniff, false)
-
-	hostName := filepath.Base(os.Args[0])
-	if runtime.GOOS == "windows" {
-		hostName = strings.TrimSuffix(hostName, filepath.Ext(hostName))
-	}
-
-	viper.SetDefault(configHostName, hostName)
-	viper.AutomaticEnv()
-}
 
 // DeciderFunc is a function type to decide whether to create a log for fullMethodName.
 type DeciderFunc func(fullMethodName string) bool
@@ -192,7 +157,7 @@ func ExtractTraceParent(ctx context.Context) string {
 	// If apmhttp.TraceparentHeader is present in request's headers
 	// then parse the trace id and return it.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if values := md.Get(traceIDHeader); len(values) == 1 {
+		if values := md.Get(apmhttp.TraceparentHeader); len(values) == 1 {
 			traceCtx, err := apmhttp.ParseTraceparentHeader(values[0])
 			if err == nil {
 				return traceCtx.Trace.String()
