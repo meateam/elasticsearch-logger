@@ -3,6 +3,8 @@ Package logger is used to log all intercepted unary and stream calls.
 The package exports the `NewLogger` function which sets up a logger with
 the elogrus hook and returns it.
 
+Setup sets up the configuration of the package from environment variables,
+MUST BE CALLED BEFORE USAGE OF PACKAGE.
 The logger can be configured using environment variables:
 
 LOG_LEVEL (default: "error") - Defines the log level of the logger, possible values:

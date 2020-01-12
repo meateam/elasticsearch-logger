@@ -129,7 +129,10 @@ func ElasticsearchLoggerServerInterceptor(
 		),
 	)
 
-	serverUnaryOptions := []apmgrpc.ServerOption{apmgrpc.WithRecovery(), apmgrpc.WithServerRequestIgnorer(defaultUnaryServerRequestIgnorer())}
+	serverUnaryOptions := []apmgrpc.ServerOption{
+		apmgrpc.WithRecovery(),
+		apmgrpc.WithServerRequestIgnorer(defaultUnaryServerRequestIgnorer()),
+	}
 
 	// Server unary interceptor set up for logging incoming requests,
 	// and outgoing responses. Make sure we put the `grpc_ctxtags`
