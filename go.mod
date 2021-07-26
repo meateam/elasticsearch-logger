@@ -11,7 +11,7 @@ require (
 	github.com/olivere/elastic/v7 v7.0.10
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/viper v1.6.1
-	go.elastic.co/apm v1.7.0
+	go.elastic.co/apm v1.11.0
 	go.elastic.co/apm/module/apmgrpc v1.7.0
 	go.elastic.co/apm/module/apmhttp v1.7.0
 	google.golang.org/grpc v1.26.0
