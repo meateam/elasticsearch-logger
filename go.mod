@@ -3,8 +3,8 @@ module github.com/meateam/elasticsearch-logger
 go 1.13
 
 require (
-	github.com/gin-gonic/gin v1.5.0
-	github.com/golang/protobuf v1.3.2
+	github.com/gin-gonic/gin v1.7.0
+	github.com/golang/protobuf v1.3.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/meateam/api-gateway v0.0.0-20200105125141-67befdfab57f
 	github.com/meateam/elogrus/v4 v4.0.2
